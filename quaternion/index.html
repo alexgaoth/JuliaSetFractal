@@ -1,0 +1,1272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A walk through the quaternion Julia set for c = −0.2 + 0.8i, ray-marched live in the browser.">
+<link rel="canonical" href="https://fractal.alexgaoth.com/">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/icon.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fractal.alexgaoth.com/">
+<meta property="og:title" content="Quaternion Julia Set">
+<meta property="og:description" content="A walk through the quaternion Julia set for c = −0.2 + 0.8i, ray-marched live in the browser.">
+<meta property="og:image" content="https://fractal.alexgaoth.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="author" content="Alex Gao">
+<title>Quaternion Julia Set</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Space+Mono&display=swap');
+  /* One fixed canvas behind a tall scroll. Words sit in the paper's two left
+     corners, outlined in paper so they read over the solid; the numbers that
+     make the solid are set in the bronze of its folds. */
+  :root {
+    --paper: #fff;
+    --ink: #111;
+    --note: #3a3732;
+    --number: #4a3a22;
+    --rule: rgba(17, 17, 17, 0.25);
+    --display: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'Space Mono', ui-monospace, Menlo, Consolas, monospace;
+    --halo: 0 0 1px var(--paper), 0 0 2px var(--paper), 0 0 3px var(--paper), 0 0 5px var(--paper), 0 0 9px var(--paper);
+    color-scheme: light;
+  }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  .stage { position: fixed; inset: 0; overflow: hidden; }
+  .stage canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+    opacity: 0; transition: opacity 0.45s ease-out;
+  }
+  .stage canvas.live { opacity: 1; }
+  .scroll { position: relative; height: 100vh; }
+  .top, .bottom {
+    position: fixed; left: 0; z-index: 1; box-sizing: border-box; max-width: 100%;
+    padding-left: max(28px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; font: 0.9rem/1.6 var(--mono); text-shadow: var(--halo);
+  }
+  .top { top: 0; padding-top: calc(28px + env(safe-area-inset-top, 0px)); }
+  .bottom { bottom: 0; padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+  /* the blocks in one corner take turns in the same place */
+  .top > *, .notes > * { grid-area: 1 / 1; }
+  .notes { display: grid; align-items: end; }
+  h1 {
+    margin: 0 0 0.4rem; font: 700 clamp(1.6rem, 3.2vw, 2.4rem)/1.1 var(--display);
+    letter-spacing: -0.01em; text-wrap: balance;
+  }
+  p { margin: 0; }
+  .math { word-spacing: -0.35em; }
+  .math sub, .math sup { font-size: 0.72em; line-height: 0; }
+  .note { max-width: 36ch; color: var(--note); }
+  .numbers {
+    min-height: 1.6em; margin-top: 0.5rem; white-space: pre-line;
+    color: var(--number); font-size: 0.82rem; font-variant-numeric: tabular-nums;
+  }
+  .numbers:empty { margin-top: 0; }
+  a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+  a:hover, a:focus-visible { background: var(--ink); color: var(--paper); text-shadow: none; outline: none; }
+  @media (max-width: 767px) {
+    .top, .bottom { padding-left: max(18px, env(safe-area-inset-left, 0px)); font-size: 0.82rem; }
+    .top { padding-top: calc(20px + env(safe-area-inset-top, 0px)); }
+    .bottom { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+    .numbers { font-size: 0.76rem; }
+  }
+  .hud {
+    position: fixed; right: 12px; top: 10px; margin: 0;
+    font: 11px/1.4 ui-monospace, monospace; color: var(--number);
+  }
+</style>
+</head>
+<body>
+<div class="stage" aria-hidden="true"><canvas id="qj"></canvas></div>
+  <header class="top">
+    <div data-shot="1">
+      <h1>a quaternion julia set</h1>
+      <p class="math">q<sub>n+1</sub> = q<sub>n</sub><sup>2</sup> + c<br>q ∈ ℍ, c = −0.2 + 0.8i, k = 0</p>
+    </div>
+    <div data-shot="61">
+      <p>read more about it <a href="https://paulbourke.net/fractals/quatjulia/">here</a></p>
+      <p><a href="/simulator/">3d fractal simulator</a></p>
+      <p><a href="https://alexgaoth.com">alex gao (alexgaoth)</a></p>
+    </div>
+  </header>
+  <div class="bottom">
+    <div class="notes">
+      <p class="note" data-shot="11" data-until="12">cut open at z&nbsp;=&nbsp;0, the face is the flat 2d julia set. its points have no j part, and neither does c, so their orbits never leave the plane.</p>
+      <p class="note" data-shot="16">the edge of the 2d set, as a cliff in 3d</p>
+      <p class="note" data-shot="43">turned 90°, the slice holds only pure imaginary q. for those, q²&nbsp;=&nbsp;−|q|², so only the radius matters: a ball.</p>
+      <p class="note" data-shot="44">cut open: a shell for each radius r where c&nbsp;−&nbsp;r² is in the 2d set.</p>
+    </div>
+    <p class="numbers" aria-live="off"></p>
+  </div>
+  <main class="scroll"></main>
+<script type="module">
+// shaders.js
+const $shaders_js = (() => {
+// GLSL for the quaternion Julia set. One full-screen triangle; every pixel
+// ray-marches the set with a distance estimator. No meshes, no assets.
+//
+// The object: every quaternion q whose orbit under q -> q^2 + c stays
+// bounded, cut by a hyperplane so it can be seen in 3D. By default the
+// hyperplane is k = uSlice and (x, y, z) are the (1, i, j) components of q;
+// uRot turns that hyperplane through four dimensions.
+
+const VERT = `#version 300 es
+in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+const RENDER_FRAG = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec2  uRes;        // render-target size, px
+uniform vec4  uC;          // Julia constant (1, i, j, k)
+uniform float uSlice;      // k component of the 3D slice
+uniform float uBound;      // radius of a sphere that contains the set
+uniform int   uIter;       // orbit iterations for the distance estimate
+uniform int   uSteps;      // ray-march step cap
+uniform float uDetail;     // hit threshold in pixel footprints
+uniform vec3  uCamPos;
+uniform vec3  uCamRight;
+uniform vec3  uCamUp;
+uniform vec3  uCamFwd;
+uniform float uTanHalfFov; // vertical
+uniform vec2  uJitter;     // sub-pixel offset, px
+uniform vec2  uShift;      // moves the subject off-centre, in half-heights
+uniform vec2  uLens;       // lens offset in world units (0 = pinhole)
+uniform float uFocusDist;
+uniform int   uAOStride;   // 1 = all five occlusion probes, 2 = three of them
+uniform int   uShadowSteps;
+uniform float uShadowMinStep;
+uniform vec3  uKeyDir;     // toward the key light, world space
+uniform vec3  uFillDir;    // toward the fill light, world space
+uniform vec3  uBg;         // paper, linear
+uniform float uHaze;       // aerial falloff toward the paper with distance
+uniform mat4  uRot;        // turns the slicing hyperplane through 4D
+uniform float uNear;       // camera-side cut: solid nearer than this shows its cross-section
+uniform vec4  uClip;       // cut plane: keeps dot(xyz, p) <= w; w >= 99 is off
+uniform float uFish;       // 0 rectilinear .. 1 equidistant fisheye
+uniform float uOrtho;      // 0 perspective .. 1 orthographic
+
+out vec4 fragColor;
+
+vec4 qsqr(vec4 a) {
+  return vec4(a.x * a.x - dot(a.yzw, a.yzw), 2.0 * a.x * a.yzw);
+}
+
+// A point of 3D space as a quaternion on the (possibly turned) hyperplane.
+vec4 lift(vec3 p) { return uRot * vec4(p, uSlice); }
+
+// Hart, Sandin & Kauffman (1989): distance <= 0.5 |z| log|z| / |z'|.
+// |z'| is tracked through |z'_{n+1}| = 2 |z_n| |z'_n|.
+float de(vec3 p, out vec4 trap) {
+  vec4 z = lift(p);
+  float md2 = 1.0;
+  float mz2 = dot(z, z);
+  trap = vec4(abs(z.yzw), mz2);
+  for (int i = 0; i < 64; i++) {
+    if (i >= uIter) break;
+    md2 *= 4.0 * mz2;
+    z = qsqr(z) + uC;
+    mz2 = dot(z, z);
+    trap = min(trap, vec4(abs(z.yzw), mz2));
+    if (mz2 > 256.0) break;
+  }
+  return 0.25 * sqrt(mz2 / md2) * log(mz2);
+}
+
+float deOnly(vec3 p) { vec4 t; return de(p, t); }
+
+// Analytic normal: the gradient of |z_n|^2 is J^T z_n, where J is the
+// orbit's Jacobian. Each step's Jacobian (up to a factor 2) is
+// [x -y -z -w; y x 0 0; z 0 x 0; w 0 0 x]; GLSL's column-major constructor
+// below builds its transpose, so J * M accumulates J^T directly.
+vec3 calcNormal(vec3 p) {
+  vec4 z = lift(p);
+  mat4 J = mat4(1.0);
+  for (int i = 0; i < 64; i++) {
+    if (i >= uIter) break;
+    J = J * mat4(z.x, -z.y, -z.z, -z.w,
+                 z.y,  z.x,  0.0,  0.0,
+                 z.z,  0.0,  z.x,  0.0,
+                 z.w,  0.0,  0.0,  z.x);
+    z = qsqr(z) + uC;
+    if (dot(z, z) > 256.0) break;
+  }
+  // q = R (p, s), so the gradient in p is the first three rows of R^T grad_q.
+  return normalize((transpose(uRot) * (J * z)).xyz);
+}
+
+// Whether p lies in the filled set (its orbit stays bounded), and how close
+// that orbit came to the origin, which patterns a cut face.
+bool insideSet(vec3 p, out float trap) {
+  vec4 z = lift(p);
+  trap = 1e9;
+  for (int i = 0; i < 64; i++) {
+    if (i >= uIter) break;
+    z = qsqr(z) + uC;
+    float m = dot(z, z);
+    trap = min(trap, m);
+    if (m > 256.0) return false;
+  }
+  return true;
+}
+
+vec2 sphereHit(vec3 ro, vec3 rd, float r) {
+  float b = dot(ro, rd);
+  float c = dot(ro, ro) - r * r;
+  float h = b * b - c;
+  if (h < 0.0) return vec2(-1.0);
+  h = sqrt(h);
+  return vec2(-b - h, -b + h);
+}
+
+// Hit distance along the ray, or -1. face: 0 = the set's surface, 1 = the
+// camera-side cut through the solid, 2 = the cut plane. A cut face shows the
+// solid's cross-section, patterned by ftrap.
+float march(vec3 ro, vec3 rd, float pix0, float pixK, out vec4 trap, out int face, out float ftrap) {
+  face = 0;
+  ftrap = 1.0;
+  vec2 bs = sphereHit(ro, rd, uBound);
+  if (bs.y < 0.0) return -1.0;
+  float t0 = max(bs.x, 0.0), t1 = bs.y;
+  bool cut = false, onPlane = false;
+  if (uNear > t0) { t0 = uNear; cut = true; }
+  if (uClip.w < 99.0) {
+    float dn = dot(uClip.xyz, rd), dp = dot(uClip.xyz, ro) - uClip.w;
+    if (abs(dn) < 1e-6) { if (dp > 0.0) return -1.0; }
+    else {
+      float th = -dp / dn;
+      if (dn > 0.0) t1 = min(t1, th);
+      else if (th > t0) { t0 = th; cut = true; onPlane = true; }
+    }
+  }
+  if (t0 > t1) return -1.0;
+  if (cut && insideSet(ro + t0 * rd, ftrap)) { face = onPlane ? 2 : 1; return t0; }
+  float t = t0;
+  for (int i = 0; i < 512; i++) {
+    if (i >= uSteps) break;
+    float h = de(ro + t * rd, trap);
+    if (h < max((pix0 + t * pixK) * uDetail, 2e-6)) return t;
+    t += h * 0.92;
+    if (t > t1) break;
+  }
+  return -1.0;
+}
+
+// Moving frames run the same occlusion and shadow, with fewer, longer steps,
+// so the image does not change tone when scrolling stops.
+float softShadow(vec3 ro, vec3 rd, float mint) {
+  vec2 bs = sphereHit(ro, rd, uBound);
+  float tmax = max(bs.y, mint);
+  float res = 1.0;
+  float t = mint;
+  for (int i = 0; i < 80; i++) {
+    if (i >= uShadowSteps) break;
+    float h = deOnly(ro + t * rd);
+    res = min(res, 10.0 * h / t);
+    t += clamp(h, uShadowMinStep, 0.15);
+    if (res < 0.002 || t > tmax) break;
+  }
+  res = clamp(res, 0.0, 1.0);
+  return res * res * (3.0 - 2.0 * res);
+}
+
+// Probe distances scale with the viewing distance, so a close-up is not
+// smothered by occlusion measured at the scale of the whole object.
+float calcAO(vec3 pos, vec3 nor, float t) {
+  float occ = 0.0;
+  float n = 0.0;
+  float s = clamp(t * 0.33, 0.04, 1.0);
+  for (int i = 0; i < 5; i += uAOStride) {
+    float h = s * (0.01 + 0.12 * float(i) / 4.0);
+    occ += (h - deOnly(pos + h * nor)) * pow(0.9, float(i));
+    n += 1.0;
+  }
+  occ *= 5.0 / n;
+  return clamp(1.0 - 4.0 * occ / s, 0.0, 1.0);
+}
+
+vec3 shade(vec3 pos, vec3 nor, vec3 rd, vec4 trap, float t, float pixAng) {
+  // Colour from the orbit trap: how close the orbit came to the origin.
+  // Deep bronze in the folds, brass on the body, cream on the crests.
+  float r = clamp(sqrt(trap.w), 0.0, 1.0);
+  vec3 deep  = vec3(0.47, 0.27, 0.15);
+  vec3 brass = vec3(0.80, 0.54, 0.33);
+  vec3 cream = vec3(0.98, 0.85, 0.72);
+  vec3 alb = mix(deep, brass, smoothstep(0.0, 0.45, r));
+  alb = mix(alb, cream, 0.55 * smoothstep(0.45, 1.0, r));
+  alb = mix(vec3(dot(alb, vec3(0.2126, 0.7152, 0.0722))), alb, 0.88);
+
+  // Occlusion: the trap darkens deep folds cheaply; the full pass adds five
+  // distance probes along the normal.
+  // Floored so the inside of a tight ring stays lit paper-brown, never black.
+  float occ = max(0.15, clamp(0.35 + 1.6 * r, 0.0, 1.0) * calcAO(pos, nor, t));
+
+  vec3 L = uKeyDir;
+  float dif = clamp(dot(nor, L), 0.0, 1.0);
+  float sha = 1.0;
+  if (dif > 0.001) {
+    sha = 0.2 + 0.8 * softShadow(pos + nor * max(t * pixAng * 2.0, 1e-4), L, 0.004 * clamp(t, 0.2, 1.0));
+  }
+  vec3 H = normalize(L - rd);
+  float ndh = clamp(dot(nor, H), 0.0, 1.0);
+  float spe = (pow(ndh, 70.0) * 1.0 + pow(ndh, 12.0) * 0.12) * dif * sha;
+  float fre = pow(clamp(1.0 + dot(nor, rd), 0.0, 1.0), 4.0);
+  float fil = clamp(dot(nor, uFillDir), 0.0, 1.0);
+  float sky = clamp(0.5 + 0.5 * nor.y, 0.0, 1.0);
+  float bou = clamp(0.5 - 0.5 * nor.y, 0.0, 1.0);
+  float hed = clamp(dot(nor, -rd), 0.0, 1.0);
+
+  vec3 lin = 0.06 * vec3(1.00, 0.97, 0.93);  // ambient that nothing occludes
+  lin += 2.60 * vec3(1.00, 0.92, 0.85) * dif * sha;
+  lin += 0.20 * vec3(0.96, 0.95, 0.98) * fil * occ;
+  lin += 0.30 * vec3(1.00, 0.97, 0.94) * sky * occ;
+  lin += 0.14 * vec3(1.00, 0.86, 0.66) * bou * occ;
+  lin += 0.30 * vec3(1.00, 0.96, 0.90) * fre * occ;
+  lin += 0.45 * vec3(1.00, 0.94, 0.90) * hed * sqrt(occ);
+  vec3 col = alb * lin;
+  col += 1.5 * spe * mix(alb, vec3(1.0), 0.5);
+  // With the key behind the object, edges facing away from the camera catch
+  // it: a rim of light around the silhouette. Zero for the usual front key.
+  float back = clamp(dot(rd, L), 0.0, 1.0);
+  col += 1.6 * back * back * fre * mix(alb, vec3(1.0), 0.7);
+  // A broad sheen facing the camera keeps deep views from going flat.
+  col += 0.18 * pow(hed, 6.0) * occ * mix(alb, vec3(1.0), 0.6);
+  return col;
+}
+
+// A cut face: the inside of the solid, banded by how its orbits behave.
+vec3 shadeFace(vec3 nor, vec3 rd, float trap) {
+  float lt = log(trap + 1e-5);
+  float band = 0.5 + 0.5 * cos(4.0 * lt);
+  vec3 cream = vec3(0.97, 0.87, 0.74);
+  vec3 brass = vec3(0.80, 0.56, 0.36);
+  vec3 deep  = vec3(0.52, 0.33, 0.20);
+  vec3 alb = mix(brass, cream, band);
+  alb = mix(deep, alb, smoothstep(-6.0, -1.5, lt));
+  float dif = clamp(dot(nor, uKeyDir), 0.0, 1.0);
+  float hed = clamp(dot(nor, -rd), 0.0, 1.0);
+  return alb * (0.30 + 1.30 * dif * vec3(1.00, 0.93, 0.86) + 0.40 * hed);
+}
+
+void main() {
+  vec2 frag = gl_FragCoord.xy + uJitter;
+  vec2 p = (2.0 * frag - uRes) / uRes.y - uShift;
+  // Rectilinear, fisheye (angle grows with distance from centre) and
+  // orthographic rays, blended so a shot can change lens mid-move.
+  float halfAng = atan(uTanHalfFov);
+  vec3 rd = normalize(p.x * uTanHalfFov * uCamRight + p.y * uTanHalfFov * uCamUp + uCamFwd);
+  float r = length(p);
+  if (uFish > 0.0 && r > 1e-6) {
+    float a = r * halfAng;
+    vec3 fish = cos(a) * uCamFwd + sin(a) * (p.x / r * uCamRight + p.y / r * uCamUp);
+    rd = normalize(mix(rd, fish, uFish));
+  }
+  float orthoScale = uFocusDist * uTanHalfFov;
+  vec3 ro = uCamPos + uOrtho * orthoScale * (p.x * uCamRight + p.y * uCamUp);
+  rd = normalize(mix(rd, uCamFwd, uOrtho));
+  if (uLens.x != 0.0 || uLens.y != 0.0) {
+    vec3 focal = ro + rd * (uFocusDist / dot(rd, uCamFwd));
+    ro += uLens.x * uCamRight + uLens.y * uCamUp;
+    rd = normalize(focal - ro);
+  }
+  float pixAng = 2.0 * mix(uTanHalfFov, halfAng, uFish) / uRes.y;
+  float pix0 = uOrtho * 2.0 * orthoScale / uRes.y;
+  float pixK = (1.0 - uOrtho) * pixAng;
+
+  vec4 trap;
+  int face;
+  float ftrap;
+  float t = march(ro, rd, pix0, pixK, trap, face, ftrap);
+  vec3 col = uBg;
+  if (t > 0.0) {
+    vec3 pos = ro + t * rd;
+    if (face == 0) {
+      col = shade(pos, calcNormal(pos), rd, trap, t, pixK + pix0 / max(t, 1e-3));
+    } else {
+      vec3 n = face == 2 ? uClip.xyz : -rd;
+      if (dot(n, rd) > 0.0) n = -n;
+      col = shadeFace(n, rd, ftrap);
+    }
+    col = 1.0 - exp(-1.05 * col);
+    col = mix(col, uBg, 1.0 - exp(-uHaze * t * t));
+  }
+  fragColor = vec4(col, 1.0);
+}
+`;
+
+// Shows the refined image, or the low-resolution motion frame, or a blend
+// while one hands over to the other. Encodes to sRGB and dithers so the soft
+// gradients on white do not band.
+const PRESENT_FRAG = `#version 300 es
+precision highp float;
+uniform sampler2D uRestTex;
+uniform sampler2D uMotionTex;
+uniform float uMix;
+uniform vec2  uOutRes;
+out vec4 fragColor;
+
+float hash(vec2 p) {
+  p = fract(p * vec2(443.897, 441.423));
+  p += dot(p, p.yx + 19.19);
+  return fract((p.x + p.y) * p.x);
+}
+
+vec3 toSrgb(vec3 c) {
+  c = clamp(c, 0.0, 1.0);
+  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uOutRes;
+  vec3 a = texture(uMotionTex, uv).rgb;
+  vec3 b = texture(uRestTex, uv).rgb;
+  vec3 col = toSrgb(mix(a, b, uMix));
+  col += (hash(gl_FragCoord.xy) + hash(gl_FragCoord.xy + 31.7) - 1.0) / 255.0;
+  fragColor = vec4(col, 1.0);
+}
+`;
+
+return { VERT, RENDER_FRAG, PRESENT_FRAG };
+})();
+// renderer.js
+const $renderer_js = (() => {
+// WebGL2 renderer for the quaternion Julia set. Two kinds of pass:
+//   motion — one sample at reduced resolution, cheap lighting, shown at once.
+//   rest   — full resolution, full lighting, one jittered sample per sweep,
+//            averaged into a half-float buffer until the image settles.
+// Rest sweeps can be split into bands of rows so no single frame stalls.
+const { VERT, RENDER_FRAG, PRESENT_FRAG } = $shaders_js;
+
+const halton = (i, b) => {
+  let f = 1, r = 0;
+  while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); }
+  return r;
+};
+const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const comb = (a, x, b, y, c, z) => norm([a[0] * x + b[0] * y + c[0] * z, a[1] * x + b[1] * y + c[1] * z, a[2] * x + b[2] * y + c[2] * z]);
+
+// cam: { pos, target, fov (vertical, degrees), roll (radians), aperture, focus }
+// Turns the slicing hyperplane through 4D: by angle a (degrees) in the plane
+// of the 1 and k axes, then by b in the plane of the i and k axes. Column-major.
+function rot4(angles) {
+  const [a = 0, b = 0] = angles || [];
+  const ca = Math.cos((a * Math.PI) / 180), sa = Math.sin((a * Math.PI) / 180);
+  const cb = Math.cos((b * Math.PI) / 180), sb = Math.sin((b * Math.PI) / 180);
+  // Ra mixes components 0 and 3, Rb mixes 1 and 3; R = Rb * Ra.
+  const Ra = [ca, 0, 0, sa, 0, 1, 0, 0, 0, 0, 1, 0, -sa, 0, 0, ca];
+  const Rb = [1, 0, 0, 0, 0, cb, 0, sb, 0, 0, 1, 0, 0, -sb, 0, cb];
+  const out = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    let v = 0;
+    for (let k = 0; k < 4; k++) v += Rb[k * 4 + r] * Ra[c * 4 + k];
+    out[c * 4 + r] = v;
+  }
+  return out;
+}
+
+function cameraBasis(cam) {
+  const fwd = norm(sub(cam.target, cam.pos));
+  let right = norm(cross(fwd, [0, 1, 0]));
+  let up = cross(right, fwd);
+  if (cam.roll) {
+    const c = Math.cos(cam.roll), s = Math.sin(cam.roll);
+    const r2 = [right[0] * c + up[0] * s, right[1] * c + up[1] * s, right[2] * c + up[2] * s];
+    up = [up[0] * c - right[0] * s, up[1] * c - right[1] * s, up[2] * c - right[2] * s];
+    right = r2;
+  }
+  if (cam.mirror) right = [-right[0], -right[1], -right[2]];
+  // Key light rides with the camera, up and to the left; fill from the right.
+  // keyFront > 0 puts the key behind the object: a backlight.
+  const key = comb(right, cam.keySide ?? -0.55, up, cam.keyUp ?? 0.72, fwd, cam.keyFront ?? -0.42);
+  const fill = comb(right, 0.85, up, -0.05, fwd, -0.35);
+  return { fwd, right, up, key, fill };
+}
+
+function compileShader(gl, type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src.trim());
+  gl.compileShader(s);
+  return s;
+}
+
+function makeTarget(gl, w, h, float) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  if (float) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fbo, w, h, ok };
+}
+
+class Renderer {
+  constructor(canvas, { preserve = false } = {}) {
+    const gl = canvas.getContext('webgl2', {
+      alpha: false, antialias: false, depth: false, stencil: false,
+      premultipliedAlpha: false, preserveDrawingBuffer: preserve,
+      powerPreference: 'high-performance',
+    });
+    if (!gl) throw new Error('webgl2-unavailable');
+    this.gl = gl;
+    this.canvas = canvas;
+    this.float = !!gl.getExtension('EXT_color_buffer_float');
+    this.parallel = gl.getExtension('KHR_parallel_shader_compile');
+    // GPU time of motion frames, where the browser exposes it. Lets the page
+    // judge the GPU itself rather than frame cadence, which a hidden or
+    // throttled window distorts.
+    this.timer = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    this.queries = [];
+    this.gpuMs = 0;
+    this.scene = { c: [-0.2, 0.6, 0.2, 0.2], slice: 0, iter: 12, bound: 1.6 };
+    this.quality = { steps: 220, detail: 0.75, haze: 0.0, motionSteps: 140 };
+    this.bg = [1, 1, 1];
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    this.vao = gl.createVertexArray();
+    gl.bindVertexArray(this.vao);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    this.sampleIndex = 0;
+    this.restRow = 0;
+  }
+
+  // Compiles without blocking the page where KHR_parallel_shader_compile
+  // exists; resolves once both programs link.
+  async compile() {
+    const gl = this.gl;
+    const mk = (fs) => {
+      const p = gl.createProgram();
+      gl.attachShader(p, compileShader(gl, gl.VERTEX_SHADER, VERT));
+      gl.attachShader(p, compileShader(gl, gl.FRAGMENT_SHADER, fs));
+      gl.bindAttribLocation(p, 0, 'aPos');
+      gl.linkProgram(p);
+      return p;
+    };
+    const progs = [mk(RENDER_FRAG), mk(PRESENT_FRAG)];
+    if (this.parallel) {
+      const done = () => progs.every((p) => gl.getProgramParameter(p, this.parallel.COMPLETION_STATUS_KHR));
+      while (!done()) await new Promise((r) => requestAnimationFrame(r));
+    }
+    for (const p of progs) {
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+        const shaders = gl.getAttachedShaders(p);
+        const log = shaders.map((s) => gl.getShaderInfoLog(s)).join('\n') + gl.getProgramInfoLog(p);
+        throw new Error('shader: ' + log);
+      }
+    }
+    [this.prog, this.present_] = progs;
+    this.loc = {};
+    for (const p of progs) {
+      const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+      for (let i = 0; i < n; i++) {
+        const name = gl.getActiveUniform(p, i).name;
+        this.loc[(p === this.prog ? 'r.' : 'p.') + name] = gl.getUniformLocation(p, name);
+      }
+    }
+  }
+
+  // Full-resolution size in device pixels; motion frames use a fraction.
+  setSize(w, h) {
+    if (this.w === w && this.h === h) return;
+    this.w = w; this.h = h;
+    this.canvas.width = w; this.canvas.height = h;
+    const gl = this.gl;
+    if (this.restT) { gl.deleteTexture(this.restT.tex); gl.deleteFramebuffer(this.restT.fbo); }
+    this.restT = makeTarget(gl, w, h, this.float);
+    this.motionT = null;
+    this.sampleIndex = 0;
+  }
+
+  motionTarget(scale) {
+    const w = Math.max(32, Math.round(this.w * scale));
+    const h = Math.max(32, Math.round(this.h * scale));
+    if (!this.motionT || this.motionT.w !== w || this.motionT.h !== h) {
+      const gl = this.gl;
+      if (this.motionT) { gl.deleteTexture(this.motionT.tex); gl.deleteFramebuffer(this.motionT.fbo); }
+      this.motionT = makeTarget(gl, w, h, this.float);
+    }
+    return this.motionT;
+  }
+
+  setUniforms(target, cam, { rest, jitter = [0, 0], lens = [0, 0] }) {
+    const gl = this.gl, L = this.loc, s = this.scene, q = this.quality;
+    const b = cameraBasis(cam);
+    gl.useProgram(this.prog);
+    gl.uniform2f(L['r.uRes'], target.w, target.h);
+    gl.uniform4fv(L['r.uC'], s.c);
+    gl.uniform1f(L['r.uSlice'], cam.slice ?? s.slice);
+    gl.uniform1f(L['r.uBound'], s.bound);
+    gl.uniform1i(L['r.uIter'], cam.iter || s.iter);
+    gl.uniform1i(L['r.uAOStride'], rest ? 1 : 2);
+    gl.uniform1i(L['r.uShadowSteps'], rest ? 80 : 28);
+    gl.uniform1f(L['r.uShadowMinStep'], rest ? 0.003 : 0.008);
+    gl.uniform1i(L['r.uSteps'], rest ? q.steps : q.motionSteps);
+    // cam.detail scales the hit threshold: the estimate runs about 3x short
+    // just outside a smooth sphere, so a ball only a few pixels wide would
+    // swell by most of a pixel footprint unless it is held tighter.
+    gl.uniform1f(L['r.uDetail'], (rest ? q.detail : q.detail * 1.6) * (cam.detail ?? 1));
+    gl.uniform3fv(L['r.uCamPos'], cam.pos);
+    gl.uniform3fv(L['r.uCamRight'], b.right);
+    gl.uniform3fv(L['r.uCamUp'], b.up);
+    gl.uniform3fv(L['r.uCamFwd'], b.fwd);
+    gl.uniform1f(L['r.uTanHalfFov'], Math.tan((cam.fov * Math.PI) / 360));
+    gl.uniform2f(L['r.uJitter'], jitter[0], jitter[1]);
+    gl.uniform2fv(L['r.uShift'], cam.offset || [0, 0]);
+    gl.uniform2f(L['r.uLens'], lens[0], lens[1]);
+    gl.uniform1f(L['r.uFocusDist'], cam.focus || Math.hypot(...sub(cam.target, cam.pos)));
+    gl.uniform3fv(L['r.uKeyDir'], b.key);
+    gl.uniform3fv(L['r.uFillDir'], b.fill);
+    gl.uniform3fv(L['r.uBg'], this.bg);
+    gl.uniform1f(L['r.uHaze'], q.haze);
+    gl.uniformMatrix4fv(L['r.uRot'], false, rot4(cam.rot4));
+    gl.uniform1f(L['r.uNear'], cam.near || 0);
+    const clip = cam.clip;
+    gl.uniform4f(L['r.uClip'], ...(clip ? [...clip.n, clip.w] : [0, 0, 1, 100]));
+    gl.uniform1f(L['r.uFish'], cam.fish || 0);
+    gl.uniform1f(L['r.uOrtho'], cam.ortho || 0);
+  }
+
+  drawMotion(cam, scale) {
+    const gl = this.gl;
+    const t = this.motionTarget(scale);
+    this.setUniforms(t, cam, { rest: false });
+    gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+    gl.viewport(0, 0, t.w, t.h);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.bindVertexArray(this.vao);
+    const q = this.timer && this.queries.length < 4 ? gl.createQuery() : null;
+    if (q) gl.beginQuery(this.timer.TIME_ELAPSED_EXT, q);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (q) { gl.endQuery(this.timer.TIME_ELAPSED_EXT); this.queries.push(q); }
+  }
+
+  // Collects finished GPU timings; call once per frame.
+  pollTimers() {
+    const gl = this.gl;
+    while (this.queries.length && gl.getQueryParameter(this.queries[0], gl.QUERY_RESULT_AVAILABLE)) {
+      const q = this.queries.shift();
+      if (!gl.getParameter(this.timer.GPU_DISJOINT_EXT)) this.gpuMs = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;
+      gl.deleteQuery(q);
+    }
+  }
+
+  // Starts averaging a new view from scratch.
+  restBegin(cam) {
+    this.restCam = cam;
+    this.sampleIndex = 0;
+    this.restRow = 0;
+  }
+
+  // Renders `rows` more rows of the current sample. Returns true when a
+  // whole sample has been completed by this call.
+  restStep(rows) {
+    const gl = this.gl, t = this.restT, cam = this.restCam;
+    const i = this.sampleIndex;
+    const jitter = i === 0 ? [0, 0] : [halton(i + 1, 2) - 0.5, halton(i + 1, 3) - 0.5];
+    let lens = [0, 0];
+    if (cam.aperture) {
+      const r = Math.sqrt(halton(i + 1, 5)) * cam.aperture, a = 2 * Math.PI * halton(i + 1, 7);
+      lens = [r * Math.cos(a), r * Math.sin(a)];
+    }
+    this.setUniforms(t, cam, { rest: true, jitter, lens });
+    gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+    gl.viewport(0, 0, t.w, t.h);
+    const y0 = this.restRow, y1 = Math.min(t.h, y0 + Math.max(1, Math.floor(rows)));
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(0, y0, t.w, y1 - y0);
+    if (i === 0) gl.disable(gl.BLEND);
+    else {
+      gl.enable(gl.BLEND);
+      gl.blendColor(0, 0, 0, 1 / (i + 1));
+      gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
+    }
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.BLEND);
+    this.restRow = y1;
+    if (y1 >= t.h) { this.restRow = 0; this.sampleIndex = i + 1; return true; }
+    return false;
+  }
+
+  // mix 0 shows the motion frame, 1 the averaged rest image.
+  present(mix) {
+    const gl = this.gl, L = this.loc;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.w, this.h);
+    gl.useProgram(this.present_);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.restT.tex);
+    gl.uniform1i(L['p.uRestTex'], 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, (this.motionT || this.restT).tex);
+    gl.uniform1i(L['p.uMotionTex'], 1);
+    gl.uniform1f(L['p.uMix'], mix);
+    gl.uniform2f(L['p.uOutRes'], this.w, this.h);
+    gl.disable(gl.BLEND);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+}
+
+// Radius of a ball that contains the filled Julia set of q^2 + c.
+const escapeRadius = (c) => 0.5 + Math.sqrt(0.25 + Math.hypot(...c)) + 0.05;
+
+return { rot4, cameraBasis, Renderer, escapeRadius };
+})();
+// stage.js
+const $stage_js = (() => {
+// The stage: one fixed canvas behind a tall scroll. Scroll position is the
+// only input. While the view moves, frames are drawn small and cheap; once it
+// stops, the same view is refined at full resolution and the GPU goes idle.
+// Shared by the hero page (main.js) and the shot reel (shots.js).
+const { Renderer, escapeRadius } = $renderer_js;
+
+const MOBILE = 768;           // narrower screens keep the still image
+const DPR_CAP = 1.5;          // full-resolution refinement never exceeds this
+const REST_DELAY = 110;       // ms without movement before refining
+const REST_SAMPLES = 24;      // jittered samples averaged at rest
+const SMOOTH_MS = 70;         // scroll smoothing time constant
+const MIN_SPEED = 0.4;        // px/ms: the glide's floor speed, so it ends in finite time
+const FADE_MS = 180;          // motion frame to refined image
+const LANDSCAPE = 1.2;        // at or below this aspect ratio, keep the still
+
+const params = new URLSearchParams(location.search);
+const debug = params.has('debug');
+const canvas = document.getElementById('qj');
+const stats = (window.qjStats = { mode: 'loading', scale: 0, samples: 0, frames: [], firstFrameMs: 0, lastInputAt: 0, sharpAt: 0 });
+
+const liveAllowed = () => params.has('force') || (innerWidth >= MOBILE && innerWidth / innerHeight > LANDSCAPE);
+
+function stayOnPoster(reason) {
+  stats.mode = 'poster:' + reason;
+  if (debug) hud();
+}
+
+// scene: the Julia constant and defaults; path: progress 0..1 -> camera;
+// onFrame(progress), if given, runs whenever the view moves. glide: false
+// follows the scroll exactly, for pages whose DOM must stay in step with the
+// view. anyScreen: run on narrow and portrait screens too. stillsOk: the page
+// handles reduced motion itself (by cutting between still views), so run
+// anyway. dprCap and restSamples lighten the refined image (phones). Resolves
+// to { snap() }, which cuts straight to the scroll position instead of gliding.
+async function start({ scene, path, onFrame, glide = true, anyScreen = false, stillsOk = false, dprCap = DPR_CAP, restSamples = REST_SAMPLES }) {
+  const allowed = () => anyScreen || liveAllowed();
+  if (!stillsOk && matchMedia('(prefers-reduced-motion: reduce)').matches) return stayOnPoster('reduced-motion');
+  if (!allowed()) return stayOnPoster(innerWidth < MOBILE ? 'narrow' : 'portrait');
+  let r;
+  try { r = new Renderer(canvas); } catch { return stayOnPoster('no-webgl2'); }
+  if (!r.float) return stayOnPoster('no-float-target');
+  // Software GL draws this at seconds per frame; the still is the better page.
+  const info = r.gl.getExtension('WEBGL_debug_renderer_info');
+  const gpuName = info ? r.gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : '';
+  if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(gpuName)) return stayOnPoster('software-gl');
+  const t0 = performance.now();
+  try { await r.compile(); } catch (e) { console.error(e); return stayOnPoster('compile'); }
+  Object.assign(r.scene, scene, { bound: escapeRadius(scene.c) });
+
+  const scrollMax = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  const progress = () => Math.min(1, Math.max(0, scrollY / scrollMax()));
+
+  let shown = progress();
+  let drawnAt = NaN;           // progress of the last drawn motion frame
+  let scale = 0.5;             // motion resolution, adapted to the GPU
+  let rows = 0;                // rest rows per frame, adapted to the budget
+  let interval = 16.7;         // display frame interval, measured on idle frames
+  const idle = [];
+  let ema = interval;
+  let last = performance.now();
+  let lastMove = last;
+  let resting = false, restDirty = true, mix = 0;
+  let running = false, gaveUp = false, slow = 0, paused = false;
+
+  // The canvas's own box, not the window: a classic scrollbar takes its width
+  // out of the canvas but not out of innerWidth, which would squeeze the
+  // image and shift it off the page's layout.
+  let sized = '';
+  const resize = () => {
+    const dpr = Math.min(devicePixelRatio || 1, dprCap);
+    const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+    // a phone's address bar coming and going resizes the window, not the canvas
+    if (`${w}x${h}` === sized) return false;
+    sized = `${w}x${h}`;
+    r.setSize(w, h);
+    drawnAt = NaN;
+    return true;
+  };
+  resize();
+
+  function frame(now) {
+    if (paused) { running = false; return; }
+    const dt = Math.min(250, now - last);
+    last = now;
+    r.pollTimers();
+    // Glide toward the scroll position: exponential, but never slower than
+    // MIN_SPEED, so the tail ends in finite time instead of creeping.
+    const target = progress();
+    const gap = target - shown;
+    const floor = (MIN_SPEED * dt) / scrollMax();
+    const step = Math.max(Math.abs(gap) * (1 - Math.exp(-dt / SMOOTH_MS)), floor);
+    shown = !glide || Math.abs(gap) <= step ? target : shown + Math.sign(gap) * step;
+
+    if (shown !== drawnAt) {
+      // Moving: one cheap frame at the adapted scale, shown at once.
+      // Budget by measured GPU time where available, else by frame cadence.
+      ema += (dt - ema) * 0.25;
+      const cost = r.gpuMs ? r.gpuMs / 0.6 : ema;
+      if (cost > Math.max(interval * 6, 100)) scale = 0.28;
+      else if (cost > Math.max(interval * 3, 50)) scale = Math.max(0.28, scale * 0.72);
+      else if (cost > Math.max(interval * 1.5, 21)) scale = Math.max(0.28, scale * 0.9);
+      else if (cost < interval * 1.2) scale = Math.min(0.75, scale * 1.03);
+      // Still slow at the smallest scale: a software or very weak GPU. Hand
+      // back to the still image rather than stutter.
+      slow = scale <= 0.29 && cost > 120 ? slow + 1 : 0;
+      if (slow >= 3) {
+        gaveUp = true;
+        canvas.classList.remove('live');
+        return stayOnPoster('slow-gpu');
+      }
+      r.drawMotion(path(shown), scale);
+      r.present(0);
+      if (onFrame) onFrame(shown);
+      drawnAt = shown;
+      lastMove = now;
+      resting = false;
+      restDirty = true;
+      mix = 0;
+      stats.mode = 'motion';
+      stats.scale = scale;
+      if (!stats.firstFrameMs) {
+        stats.firstFrameMs = Math.round(now - t0);
+        stats.firstFrameNavMs = Math.round(now);
+      }
+      canvas.classList.add('live');
+      stats.frames.push(dt);
+      if (stats.frames.length > 4000) stats.frames.shift();
+    } else if (restDirty && now - lastMove <= REST_DELAY) {
+      // Nothing drawn this frame: a clean sample of the display's cadence.
+      idle.push(dt);
+      if (idle.length > 31) idle.shift();
+      const sorted = [...idle].sort((a, b) => a - b);
+      interval = Math.min(34, Math.max(6.9, sorted[sorted.length >> 1]));
+    } else if (restDirty) {
+      r.restBegin(path(shown));
+      rows = rows || Math.ceil(r.h / 2);
+      restDirty = false;
+      resting = true;
+      stats.samples = 0;
+      stats.restStart = now;
+      stats.sharpAt = 0;
+    }
+
+    if (resting) {
+      // Refining: as many rows as fit the frame budget, then show the
+      // average, fading over from the motion frame once a full pass exists.
+      // Nothing moves while refining, so a frame may run long; the cap keeps
+      // the next scroll answered within about two display frames.
+      if (dt > 34) rows = Math.max(16, Math.floor(rows * 0.7));
+      else if (dt < 24) rows = Math.min(r.h, Math.ceil(rows * 1.25));
+      // A first full pass that takes seconds means a weak GPU: keep the
+      // motion frame rather than grind.
+      if (r.sampleIndex === 0 && now - stats.restStart > 3000) {
+        resting = false;
+        stats.mode = 'idle-unrefined';
+      }
+      if (r.restStep(rows)) {
+        stats.samples = r.sampleIndex;
+        if (r.sampleIndex === 1) stats.firstRestMs = Math.round(now - stats.restStart);
+      }
+      if (r.sampleIndex >= 1) mix = Math.min(1, mix + dt / FADE_MS);
+      r.present(mix);
+      // When the full-resolution image is fully on screen.
+      if (mix >= 1 && !stats.sharpAt) stats.sharpAt = now;
+      stats.mode = 'rest';
+      if (r.sampleIndex >= restSamples && mix >= 1) {
+        resting = false;
+        stats.mode = 'idle';
+        stats.restMs = Math.round(now - stats.restStart);
+        stats.doneAt = now;
+      }
+    }
+
+    if (debug) hud();
+    running = resting || shown !== target || restDirty;
+    if (running) requestAnimationFrame(frame);
+  }
+
+  const wake = () => {
+    if (!running && !gaveUp && !paused) { running = true; last = performance.now(); requestAnimationFrame(frame); }
+  };
+  addEventListener('scroll', () => { stats.lastInputAt = performance.now(); wake(); }, { passive: true });
+  addEventListener('resize', () => {
+    // Turned to portrait or squeezed narrow: hand back to the still.
+    paused = !allowed();
+    if (paused) { canvas.classList.remove('live'); stats.mode = 'poster:portrait'; return; }
+    if (resize()) { restDirty = true; wake(); }
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+  wake();
+  return { snap() { shown = progress(); wake(); } };
+}
+
+let hudEl;
+function hud() {
+  if (!hudEl) {
+    hudEl = document.createElement('pre');
+    hudEl.className = 'hud';
+    document.body.appendChild(hudEl);
+  }
+  const f = stats.frames.slice(-60);
+  const avg = f.length ? f.reduce((a, b) => a + b, 0) / f.length : 0;
+  hudEl.textContent = `${stats.mode}  scale ${stats.scale.toFixed(2)}  ${avg ? (1000 / avg).toFixed(0) + ' fps' : ''}  samples ${stats.samples}`;
+}
+
+return { start };
+})();
+// path.js
+const $path_js = (() => {
+// The camera path. Scroll is the only input: page progress 0..1 maps to a
+// position between stations, and each station holds still for a while so
+// text can sit beside it later. Pure function of progress, so scrolling back
+// runs it exactly in reverse.
+//
+// A station orbits a target: position = target + dist * (direction from
+// azimuth and elevation). Interpolating the orbit instead of raw positions
+// keeps every in-between camera swinging around the object, not through it.
+
+const smooth = (t) => t * t * (3 - 2 * t);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const KEYS = ['az', 'el', 'dist', 'tx', 'ty', 'tz', 'fov', 'roll', 'aperture', 'ox', 'oy', 'iter', 'kx',
+  'ku', 'kf', 'slice', 'ra', 'rb', 'near', 'fish', 'ortho', 'clipOn', 'clipW', 'clipAz', 'clipEl'];
+
+// Resolve a station (or via point) to plain numbers.
+const flat = (s) => ({
+  az: s.az, el: s.el, dist: s.dist,
+  tx: s.target[0], ty: s.target[1], tz: s.target[2],
+  fov: s.fov, roll: s.roll || 0, aperture: s.aperture || 0,
+  ox: (s.offset || [0, 0])[0], oy: (s.offset || [0, 0])[1],
+  iter: s.iter || 16,
+  kx: s.keySide ?? -0.55,
+  ku: s.keyUp ?? 0.72,
+  kf: s.keyFront ?? -0.42,
+  slice: s.slice ?? 0,
+  ra: (s.rot4 || [0, 0])[0], rb: (s.rot4 || [0, 0])[1],
+  near: s.near ?? 0,
+  fish: s.fish ?? 0,
+  ortho: s.ortho ?? 0,
+  // A cut plane sweeps in from the edge of the object as clipOn goes 0 -> 1.
+  clipOn: s.clip ? 1 : 0,
+  clipW: s.clip ? s.clip.w : 0, clipAz: s.clip ? s.clip.az : 0, clipEl: s.clip ? s.clip.el : 0,
+});
+
+// stations: [{ at, hold, drift, ...station }] in page progress order. A
+// station is reached at `at` and held until `at + hold`, drifting by `drift`
+// (same fields, added) so scrolling never feels dead. A station with no hold
+// is a via point that a move passes through without stopping.
+//
+// A hold eases between its two ends and nothing else, so it cannot overshoot.
+// A move runs from one hold to the next as a single eased sweep through its
+// via points (Hermite curve, tangents from neighbouring knots), so the camera
+// stops only where a station holds. With `monotone`, the tangents are limited
+// (Fritsch & Carlson 1980) so no value overshoots a knot and turns back.
+function makePath(stations, { monotone = false } = {}) {
+  const knots = [];
+  for (const s of stations) {
+    const k = { ...flat(s), at: s.at, stop: !!s.hold, holdOut: false };
+    knots.push(k);
+    if (s.hold) {
+      const out = { ...k, at: s.at + s.hold, holdOut: true };
+      for (const [f, dv] of Object.entries(s.drift || {})) out[f] += dv;
+      knots.push(out);
+    }
+  }
+  knots[0].stop = knots[knots.length - 1].stop = true;
+  const last = knots.length - 1;
+
+  const tangent = (i, s, e, key) => {
+    const lo = Math.max(s, i - 1), hi = Math.min(e, i + 1);
+    return (knots[hi][key] - knots[lo][key]) / (knots[hi].at - knots[lo].at);
+  };
+  const limited = new Map();
+  const limitedTangents = (s, e) => {
+    if (limited.has(s)) return limited.get(s);
+    const T = {};
+    for (const key of KEYS) {
+      const m = [];
+      for (let i = s; i <= e; i++) m.push(tangent(i, s, e, key));
+      for (let i = s; i < e; i++) {
+        const a = i - s, d = (knots[i + 1][key] - knots[i][key]) / (knots[i + 1].at - knots[i].at);
+        if (d === 0) { m[a] = 0; m[a + 1] = 0; continue; }
+        if (m[a] / d < 0) m[a] = 0;
+        if (m[a + 1] / d < 0) m[a + 1] = 0;
+        const al = m[a] / d, be = m[a + 1] / d, r = al * al + be * be;
+        if (r > 9) { const t = 3 / Math.sqrt(r); m[a] = t * al * d; m[a + 1] = t * be * d; }
+      }
+      T[key] = m;
+    }
+    limited.set(s, T);
+    return T;
+  };
+
+  return function sample(progress) {
+    const p = Math.min(knots[last].at, Math.max(knots[0].at, progress));
+    let i = 0;
+    while (i < last - 1 && p >= knots[i + 1].at) i++;
+    const a = knots[i], b = knots[i + 1];
+    const v = {};
+    if (b.holdOut) {
+      const t = smooth((p - a.at) / (b.at - a.at));
+      for (const key of KEYS) v[key] = lerp(a[key], b[key], t);
+      return toCamera(v);
+    }
+    // The move containing this segment: from the stop before to the stop after.
+    let s = i; while (!knots[s].stop) s--;
+    let e = i + 1; while (!knots[e].stop) e++;
+    const t0 = knots[s].at, t1 = knots[e].at;
+    const tau = t0 + smooth((p - t0) / (t1 - t0)) * (t1 - t0);
+    let j = s;
+    while (j < e - 1 && tau >= knots[j + 1].at) j++;
+    const k0 = knots[j], k1 = knots[j + 1], d = k1.at - k0.at;
+    const u = (tau - k0.at) / d, u2 = u * u, u3 = u2 * u;
+    const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+    const T = monotone ? limitedTangents(s, e) : null;
+    for (const key of KEYS) {
+      const m0 = T ? T[key][j - s] : tangent(j, s, e, key);
+      const m1 = T ? T[key][j + 1 - s] : tangent(j + 1, s, e, key);
+      v[key] = h00 * k0[key] + h10 * d * m0 + h01 * k1[key] + h11 * d * m1;
+    }
+    return toCamera(v);
+  };
+}
+
+// Plane normal from azimuth/elevation; as clipOn rises the plane slides in
+// from just outside the object (radius ~1.6) to its resting offset.
+function clipPlane(v) {
+  if (!(v.clipOn > 0.002)) return null;
+  const a = (v.clipAz * Math.PI) / 180, e = (v.clipEl * Math.PI) / 180;
+  const n = [Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a)];
+  const on = Math.min(1, v.clipOn);
+  return { n, w: 1.7 + (v.clipW - 1.7) * on };
+}
+
+function toCamera(v) {
+  const az = (v.az * Math.PI) / 180, el = (v.el * Math.PI) / 180;
+  const dir = [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+  const target = [v.tx, v.ty, v.tz];
+  const pos = [target[0] + v.dist * dir[0], target[1] + v.dist * dir[1], target[2] + v.dist * dir[2]];
+  return {
+    pos, target, fov: v.fov, roll: (v.roll * Math.PI) / 180,
+    aperture: Math.max(0, v.aperture), focus: v.dist,
+    // Screen-space shift of the subject, as a fraction of the frame height,
+    // so a station can sit off-centre and leave room for text.
+    offset: [v.ox, v.oy],
+    // Orbit iterations: more up close, where finer layers become visible.
+    iter: Math.round(v.iter),
+    // Where the key light sits across the frame: -0.55 is upper left.
+    keySide: v.kx,
+    keyUp: v.ku,
+    keyFront: v.kf,
+    slice: v.slice,
+    rot4: [v.ra, v.rb],
+    near: Math.max(0, v.near),
+    fish: Math.min(1, Math.max(0, v.fish)),
+    ortho: Math.min(1, Math.max(0, v.ortho)),
+    clip: clipPlane(v),
+  };
+}
+
+
+return { makePath, toCamera, lerp, smooth, flat };
+})();
+// scene.js
+const $scene_js = (() => {
+// The object and the walk around it. Everything the page shows comes from
+// these numbers.
+
+// c = -0.2 + 0.8i, from Paul Bourke's catalogue. Because c is complex, the
+// plane z = 0 cuts this solid exactly along the 2D Julia set of the same c.
+const SCENE = { c: [-0.2, 0.8, 0.0, 0.0], slice: 0.0, iter: 16 };
+
+// Where the whorl's eye sits; found by casting a ray through it.
+const EYE = [-0.311, 0.384, 0.165];
+
+// Page progress 0..1. Holds are where text will sit later.
+const STATIONS = [
+  // Act one: the whole object, whorl facing you, on the right.
+  { at: 0.0, hold: 0.1, drift: { az: 6 }, az: 50, el: 10, dist: 4.3, target: [0, 0, 0], fov: 40, offset: [0.45, -0.03], iter: 16 },
+  // Act two: pushed straight in on the same framing, until the whorl's eye
+  // and the ribbons streaming into it fill the right of the frame.
+  { at: 0.34, hold: 0.1, drift: { az: 3, dist: -0.1 }, az: 50, el: 7, dist: 1.7, target: EYE, fov: 44, offset: [0.55, 0], iter: 24, keySide: 0.25 },
+  // Back out the way we came before swinging up.
+  { at: 0.5, az: 58, el: 9, dist: 2.7, target: [-0.15, 0.19, 0.08], fov: 46, offset: [-0.1, 0], iter: 18 },
+  // Act three: from above, the lantern stands upright, on the left.
+  { at: 0.64, hold: 0.1, drift: { az: 8 }, az: 90, el: 70, dist: 5.0, target: [0, 0, 0], fov: 40, offset: [-0.45, 0] },
+  // Finale: small, high and calm, leaving the lower half for the doors.
+  { at: 0.9, hold: 0.1, drift: { az: 5 }, az: 140, el: 32, dist: 9.5, target: [0, 0, 0], fov: 36, offset: [0, 0.45] },
+];
+
+return { SCENE, STATIONS };
+})();
+// tour-data.js
+const $tour_data_js = (() => {
+// The tour's views, by reel number, in scroll order. Generated by
+// tools/make-tour.mjs from the reel (src/shots-data.js); edit there.
+const TOUR = [
+  { n: 1, pace: 91, st: {"az":50,"el":10,"dist":4.3,"target":[0,0,0],"fov":40,"iter":16}, vias: [] },
+  { n: 2, pace: 253, st: {"fov":40,"iter":18,"az":60,"el":70,"dist":4.4,"target":[0,0,0]}, vias: [] },
+  { n: 3, pace: 220, st: {"fov":40,"iter":18,"az":-60,"el":-50,"dist":4.4,"target":[0,0,0]}, vias: [] },
+  { n: 6, pace: 0, st: {"az":90,"el":0,"dist":6,"target":[0,0,0],"fov":40,"iter":18,"ortho":1}, vias: [] },
+  { n: 7, pace: 0, st: {"az":90,"el":0,"dist":14,"target":[0,0,0],"fov":11.8262,"iter":22}, vias: [{"az":90,"el":0,"dist":7,"target":[0,0,0],"fov":23.4058,"iter":22},{"az":90,"el":0,"dist":3.5,"target":[0,0,0],"fov":45.0071,"iter":22},{"az":90,"el":0,"dist":2,"target":[0,0,0],"fov":71.8842,"iter":22}] },
+  { n: 8, pace: 0, st: {"az":90,"el":0,"dist":1.2,"target":[0,0,0],"fov":100.7786,"iter":22}, vias: [] },
+  { n: 9, pace: 135, st: {"az":90,"el":0,"dist":1.3,"target":[0,0,0],"fov":60,"iter":26,"clip":{"az":90,"el":0,"w":0}}, vias: [] },
+  { n: 10, pace: 0, st: {"az":0,"el":0,"dist":1.3,"target":[0,0,0.45],"fov":60,"iter":26,"clip":{"az":0,"el":0,"w":0.45}}, vias: [] },
+  { n: 11, pace: 0, st: {"az":0,"el":0,"dist":1.3,"target":[0,0,0],"fov":60,"iter":26,"clip":{"az":0,"el":0,"w":0}}, vias: [] },
+  { n: 12, pace: 0, st: {"az":0,"el":0,"dist":1,"target":[-0.327,0.4837,0],"fov":40,"iter":40,"clip":{"az":0,"el":0,"w":0}}, vias: [{"az":0,"el":0,"dist":0.5,"target":[-0.327,0.4837,0],"fov":40,"iter":44,"clip":{"az":0,"el":0,"w":0}}] },
+  { n: 13, pace: 0, st: {"az":0,"el":0,"dist":0.25,"target":[-0.327,0.4837,0],"fov":40,"iter":48,"clip":{"az":0,"el":0,"w":0},"roll":8}, vias: [{"az":0,"el":0,"dist":0.11,"target":[-0.327,0.4837,0],"fov":40,"iter":56,"clip":{"az":0,"el":0,"w":0},"roll":16}] },
+  { n: 14, pace: 0, st: {"az":0,"el":0,"dist":0.05,"target":[-0.327,0.4837,0],"fov":40,"iter":64,"clip":{"az":0,"el":0,"w":0},"roll":24}, vias: [{"az":0,"el":0,"dist":0.024,"target":[-0.327,0.4837,0],"fov":40,"iter":64,"clip":{"az":0,"el":0,"w":0},"roll":32}] },
+  { n: 15, pace: 64, st: {"az":0,"el":0,"dist":0.012,"target":[-0.327,0.4837,0],"fov":40,"iter":64,"clip":{"az":0,"el":0,"w":0},"roll":40}, vias: [] },
+  { n: 16, pace: 43, st: {"az":25,"el":35,"dist":0.3,"target":[-0.327,0.4837,0],"fov":45,"iter":48,"clip":{"az":0,"el":0,"w":0}}, vias: [] },
+  { n: 17, pace: 238, st: {"fov":40,"iter":22,"az":10,"el":10,"dist":1.6,"target":[0.3,0.2,0],"clip":{"az":0,"el":0,"w":0}}, vias: [{"az":86.985,"el":-22.645,"dist":2.8,"target":[0.0433,-0.0804,0.1089],"fov":45,"iter":18}] },
+  { n: 23, pace: 0, st: {"az":163.97,"el":-55.29,"dist":0.06,"target":[-0.2134,-0.3608,0.2177],"fov":75,"iter":24}, vias: [{"az":163.97,"el":-55.29,"dist":0.66,"target":[-0.2134,-0.3608,0.2177],"fov":70,"iter":24}] },
+  { n: 24, pace: 314, st: {"az":163.97,"el":-55.29,"dist":2.6,"target":[-0.2134,-0.3608,0.2177],"fov":45,"iter":24}, vias: [{"az":213.72,"el":-31.029,"dist":2.8,"target":[0.0452,-0.1688,0.3177],"fov":45,"iter":18},{"fov":35.3519,"iter":26,"az":263.4701,"el":-6.768,"dist":0.2253,"target":[-0.6573,-0.4058,0.7372],"aperture":0}] },
+  { n: 25, pace: 499, st: {"fov":35.3519,"iter":26,"az":263.4701,"el":-6.768,"dist":0.2253,"target":[0.3038,0.0232,0.4177]}, vias: [{"fov":35.3519,"iter":26,"az":263.4701,"el":-6.768,"dist":0.2253,"target":[-0.6574,-0.4058,0.7372],"aperture":0},{"az":200.5797,"el":-1.7899,"dist":2.8,"target":[0.4262,-0.1784,-0.0953],"fov":45,"iter":18},{"fov":31.8008,"iter":26,"az":137.6894,"el":3.1881,"dist":0.2781,"target":[0.7074,-0.3909,-0.9312],"aperture":0}] },
+  { n: 27, pace: 67, st: {"fov":31.8008,"iter":26,"az":137.6894,"el":3.1881,"dist":0.2781,"target":[0.5486,-0.3801,-0.6083]}, vias: [{"az":159.8101,"el":0.8055,"dist":2.8,"target":[0.2592,0.1033,0.1152],"fov":45,"iter":18}] },
+  { n: 30, pace: 19, st: {"fov":72,"iter":26,"az":181.9308,"el":-1.5771,"dist":0.8006,"target":[-0.0302,0.5868,0.8386]}, vias: [{"fov":72,"iter":26,"az":181.9308,"el":-1.5771,"dist":0.8006,"target":[0.5345,0.5484,-0.3094],"aperture":0},{"az":179.5451,"el":-3.7683,"dist":9.9632,"target":[-0.4568,0.5062,0.6704],"fov":45,"iter":18}] },
+  { n: 33, pace: 192, st: {"fov":4.8323,"iter":22,"az":177.1593,"el":-5.9596,"dist":9.9632,"target":[-0.8835,0.4257,0.5022]}, vias: [] },
+  { n: 39, pace: 12, st: {"az":50,"el":7,"dist":1.7,"target":[-0.311,0.384,0.165],"fov":44,"iter":24,"keySide":0.25}, vias: [] },
+  { n: 40, pace: 0, st: {"fov":40,"iter":18,"az":50,"el":15,"dist":4.4,"target":[0,0,0],"rot4":[20,0]}, vias: [] },
+  { n: 41, pace: 0, st: {"fov":40,"iter":18,"az":50,"el":15,"dist":4.4,"target":[0,0,0],"rot4":[50,0]}, vias: [] },
+  { n: 42, pace: 0, st: {"fov":40,"iter":18,"az":50,"el":15,"dist":4.4,"target":[0,0,0],"rot4":[70,0]}, vias: [] },
+  { n: 43, pace: 30, st: {"fov":40,"iter":22,"az":50,"el":15,"dist":4.4,"target":[0,0,0],"rot4":[90,0]}, vias: [] },
+  { n: 44, pace: 30, st: {"fov":40,"iter":22,"az":30,"el":20,"dist":4,"target":[0,0,0],"rot4":[90,0],"clip":{"az":0,"el":0,"w":0}}, vias: [] },
+  { n: 52, pace: 0, st: {"fov":40,"iter":18,"az":50,"el":15,"dist":4,"target":[0,0,0],"slice":0.25}, vias: [] },
+  { n: 53, pace: 0, st: {"fov":40,"iter":18,"az":50,"el":15,"dist":4,"target":[0,0,0],"slice":0.55}, vias: [] },
+  { n: 54, pace: 94, st: {"fov":40,"iter":18,"az":50,"el":15,"dist":4,"target":[0,0,0],"slice":0.7}, vias: [] },
+  { n: 60, pace: 75, st: {"az":90,"el":70,"dist":5,"target":[0,0,0],"fov":40}, vias: [] },
+  { n: 61, pace: 0, st: {"az":140,"el":32,"dist":9.5,"target":[0,0,0],"fov":36}, vias: [] },
+];
+
+return { TOUR };
+})();
+// tour.js
+// The tour: a walk through views picked from the shot reel, driven only by
+// scroll. Words come in at a few views (data-shot in tour.html). While one of
+// the numbers that makes the solid changes (where a cut plane sits, how far
+// the slice is turned through the fourth dimension, where it sits along the
+// fourth axis), its value is shown as it changes.
+const { start } = $stage_js;
+const { makePath } = $path_js;
+const { SCENE } = $scene_js;
+const { TOUR } = $tour_data_js;
+
+const HOLD = 0.35;            // units of scroll a view holds still
+const END_HOLD = 0.9;         // the first and last views, which carry words
+const PACE = 140;              // a move is 1 unit, longer where the view turns
+const MOVE_MAX = 3;           // faster than this many degrees per unit at its peak
+const SCREENS_PER_UNIT = 0.7;
+const FADE = 0.3;             // words fade over this much of the next move
+
+const N = TOUR.length;
+const holds = TOUR.map((_, i) => (i === 0 || i === N - 1 ? END_HOLD : HOLD));
+const moves = TOUR.map((s, i) => (i === N - 1 ? 0 : Math.min(MOVE_MAX, Math.max(1, s.pace / PACE))));
+const arrive = [];
+let T = 0;
+for (let i = 0; i < N; i++) { arrive.push(T); T += holds[i] + moves[i]; }
+const stations = [];
+TOUR.forEach((s, i) => {
+  stations.push({ ...s.st, at: arrive[i] / T, hold: holds[i] / T });
+  s.vias.forEach((v, k) => stations.push({ ...v, at: (arrive[i] + holds[i] + ((k + 1) / (s.vias.length + 1)) * moves[i]) / T }));
+});
+const scroll = document.querySelector('.scroll');
+scroll.style.height = `${(T * SCREENS_PER_UNIT + 1) * 100}vh`;
+
+if (new URLSearchParams(location.search).has('debug')) window.qjTour = { arrive, holds, moves, T, n: TOUR.map((s) => s.n) };
+
+const canvas = document.getElementById('qj');
+const path = makePath(stations, { monotone: true });
+// The views are framed for a landscape screen. On a portrait one the lens
+// widens until the screen's width shows what a landscape screen's height does.
+const view = (p) => {
+  const cam = path(p), f = canvas.clientHeight / canvas.clientWidth;
+  if (f > 1) cam.fov = (360 / Math.PI) * Math.atan(Math.tan((cam.fov * Math.PI) / 360) * f);
+  return cam;
+};
+
+// Each block of words shows while its views hold, and fades over the moves
+// either side.
+const index = (n) => { const i = TOUR.findIndex((s) => s.n === +n); if (i < 0) throw new Error('no view ' + n); return i; };
+const words = [...document.querySelectorAll('[data-shot]')].map((el) => ({
+  el, i: index(el.dataset.shot), j: index(el.dataset.until || el.dataset.shot),
+}));
+function presence(x, { i, j }) {
+  const a = arrive[i], b = arrive[j] + holds[j];
+  const fi = i > 0 ? FADE * moves[i - 1] : 0, fo = j < N - 1 ? FADE * moves[j] : 0;
+  if (x < a - fi || x > b + fo) return 0;
+  if (x < a) return (x - (a - fi)) / fi;
+  if (x > b) return 1 - (x - b) / fo;
+  return 1;
+}
+
+const numbers = document.querySelector('.numbers');
+const fmt = (v) => (v < -0.005 ? '−' : '') + Math.abs(v).toFixed(2);
+function readout(cam) {
+  const lines = [];
+  if (cam.clip) {
+    const n = cam.clip.n.map(Math.abs), k = n.indexOf(Math.max(...n));
+    lines.push(`cut at ${'xyz'[k]} = ${fmt(cam.clip.w * Math.sign(cam.clip.n[k]))}`);
+  }
+  for (const a of cam.rot4) if (Math.abs(a) >= 0.5) lines.push(`turned ${Math.round(Math.abs(a))}° through the fourth dimension`);
+  if (cam.slice > 0.005) lines.push(`slice at k = ${fmt(cam.slice)}`);
+  return lines.join('\n');
+}
+
+let shownText = null;
+function show(p) {
+  const x = p * T;
+  for (const w of words) {
+    const o = presence(x, w);
+    w.el.style.opacity = o.toFixed(3);
+    w.el.style.visibility = o > 0 ? '' : 'hidden';
+  }
+  const text = readout(view(p));
+  if (text !== shownText) numbers.textContent = shownText = text;
+}
+
+// With reduced motion the tour cuts between its views: no camera travels.
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const nearest = (p) => {
+  const x = p * T;
+  let i = 0;
+  while (i < N - 1 && x > arrive[i] + holds[i] + moves[i] / 2) i++;
+  return arrive[i] / T;
+};
+const scrollMax = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
+show(Math.min(1, Math.max(0, scrollY / scrollMax())));
+
+// A phone refines lighter: fewer device pixels and samples.
+const light = innerWidth < 768 ? { dprCap: 1.25, restSamples: 10 } : {};
+await start({ scene: SCENE, path: still ? (p) => view(nearest(p)) : view, onFrame: show, anyScreen: true, stillsOk: true, glide: !still, ...light });
+if (window.qjStats.mode.startsWith('poster')) {
+  scroll.style.height = '100vh';
+  numbers.textContent = 'the live view needs a browser with WebGL2';
+}
+
+</script>
+</body>
+</html>

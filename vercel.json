@@ -1,0 +1,7 @@
+{
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "rm -rf out && mkdir -p out/simulator && cp -R docs/. out/simulator/ && cp -R quaternion/. out/",
+  "outputDirectory": "out",
+  "redirects": [{ "source": "/simulator", "destination": "/simulator/", "permanent": true }]
+}
